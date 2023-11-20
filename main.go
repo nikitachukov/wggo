@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gofiber/fiber/v2"
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"log"
 	"wggo/common"
 	"wggo/mikrotikgo"
@@ -14,8 +15,7 @@ var username string
 var password string
 var tlsConfig *tls.Config
 
-func main() {
-
+func startApp() {
 	var (
 		roleId       = "697a6493-09a8-9a37-a9e3-ef8106b78507"
 		secretId     = "200913ae-c711-00a8-cb94-3c1b8bca6a23"
@@ -33,6 +33,18 @@ func main() {
 	app.Static("/", "www") // http://localhost:3000
 
 	log.Fatal(app.Listen(":3000"))
+
+}
+
+func main() {
+	privateKey, _ := wgtypes.GeneratePrivateKey()
+	presharedKey, _ := wgtypes.GenerateKey()
+	println("PresharedKey")
+	println(presharedKey.String())
+	println("PrivateKey:")
+	println(privateKey.String())
+	println("PublicKey:")
+	print(privateKey.PublicKey().String())
 }
 
 func hello(c *fiber.Ctx) error {
