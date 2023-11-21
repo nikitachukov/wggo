@@ -5,6 +5,7 @@ go 1.21.4
 require (
 	github.com/gofiber/fiber/v2 v2.51.0
 	github.com/hashicorp/vault-client-go v0.4.2
+	//golang.zx2c4.com/wireguard/wgctrl v0.0.0-20230429144221-925a1e7659e6
 )
 
 require (
@@ -24,6 +25,7 @@ require (
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.50.0 // indirect
 	github.com/valyala/tcplisten v1.0.0 // indirect
+	//golang.org/x/crypto v0.8.0 // indirect
 	golang.org/x/sys v0.14.0 // indirect
 	golang.org/x/time v0.0.0-20220922220347-f3bd1da661af // indirect
 )

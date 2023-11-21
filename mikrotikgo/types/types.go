@@ -1,7 +1,7 @@
 package mikrotikgo
 
 type Peer struct {
-	ID                     string `json:".id"`
+	MikrotikID             string `json:".id"`
 	AllowedAddress         string `json:"allowed-address"`
 	ClientEndpoint         string `json:"client-endpoint"`
 	CurrentEndpointAddress string `json:"current-endpoint-address"`

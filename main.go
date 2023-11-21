@@ -3,10 +3,9 @@ package main
 import (
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"github.com/gofiber/fiber/v2"
-	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"log"
+	"strconv"
 	"wggo/common"
 	"wggo/mikrotikgo"
 )
@@ -37,36 +36,63 @@ func startApp() {
 }
 
 func main() {
-	privateKey, _ := wgtypes.GeneratePrivateKey()
-	presharedKey, _ := wgtypes.GenerateKey()
-	println("PresharedKey")
-	println(presharedKey.String())
-	println("PrivateKey:")
-	println(privateKey.String())
-	println("PublicKey:")
-	print(privateKey.PublicKey().String())
+	startApp()
+	//privateKey, _ := wgtypes.GeneratePrivateKey()
+	//presharedKey, _ := wgtypes.GenerateKey()
+	//println("PresharedKey")
+	//println(presharedKey.String())
+	//println("PrivateKey:")
+	//println(privateKey.String())
+	//println("PublicKey:")
+	//print(privateKey.PublicKey().String())
 }
 
-func hello(c *fiber.Ctx) error {
+func ParseComment(commnet string) (peer common.MyPeer, err error) {
+	peer = common.MyPeer{}
+	err = json.Unmarshal([]byte(commnet), &peer)
 
-	for _, t := range mikrotikgo.GetPeers(username, password, tlsConfig) {
-		fmt.Println(t.ID, "-", t.AllowedAddress)
+	if err != nil {
+		log.Println(err)
 	}
 
-	return c.SendString("ok")
+	return
+}
+
+func client(c *fiber.Ctx) error {
+	mikrotikPeers := mikrotikgo.GetPeers(username, password, tlsConfig)
+	var _result []common.MyPeer
+
+	for _, t := range mikrotikPeers {
+		mypeer, err := ParseComment(t.Comment)
+		if err != nil {
+			continue
+		}
+		mypeer.PublicKey = t.PublicKey
+		mypeer.PrivateKey = t.PrivateKey
+		mypeer.PresharedKey = t.PresharedKey
+		mypeer.Address = t.AllowedAddress
+		mypeer.Enabled, _ = strconv.ParseBool(t.Disabled)
+
+		_result = append(_result, mypeer)
+	}
+
+	result, err := json.Marshal(_result)
+	if err != nil {
+		panic(err)
+	}
+	return c.SendString(string(result))
+
 }
 
 func session(c *fiber.Ctx) error {
 	mySession, err := json.Marshal(common.MySession{RequiresPassword: false, Authenticated: true})
-
 	if err != nil {
 		panic(err)
 	}
-
 	return c.SendString(string(mySession))
 }
 
-func client(c *fiber.Ctx) error {
+func hello(c *fiber.Ctx) error {
 
 	return c.SendString("[{" +
 		"\"id\":\"94924658-f969-4f4f-b70c-05bb0d370faf\"," +
