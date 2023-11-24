@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"crypto/tls"
 	"encoding/json"
 	"github.com/gofiber/fiber/v2"
 	"log"
+	"net"
+	"sort"
 	"strconv"
+	"strings"
 	"wggo/common"
 	"wggo/mikrotikgo"
 )
@@ -28,11 +32,40 @@ func startApp() {
 	app := fiber.New()
 	app.Get("/hello", hello)
 	app.Get("/api/session", session)
-	app.Get("/api/wireguard/client", client)
+	app.Get("/api/wireguard/client", GetPeers)
+	app.Post("/api/wireguard/client", AddPeer)
 	app.Static("/", "www") // http://localhost:3000
 
 	log.Fatal(app.Listen(":3000"))
 
+}
+func AddPeer(c *fiber.Ctx) error {
+	payload := struct {
+		Name string `json:"name"`
+	}{}
+
+	if err := c.BodyParser(&payload); err != nil {
+		return err
+	}
+
+	log.Println(payload.Name)
+	peers := mikrotikgo.GetPeers(username, password, tlsConfig)
+	var ips []net.IP
+	for _, peer := range peers {
+		if peer.Interface == "wg-in" {
+			ips = append(ips, net.ParseIP(strings.Split(peer.AllowedAddress, "/")[0]))
+			println(peer.AllowedAddress, peer.Interface)
+		}
+	}
+
+	sort.Slice(ips, func(i, j int) bool {
+		return bytes.Compare(ips[i], ips[j]) < 0
+	})
+
+	nextIP := common.NextIP(ips[len(ips)-1], 1)
+	println(nextIP.String())
+
+	return c.JSON(payload)
 }
 
 func main() {
@@ -58,7 +91,7 @@ func ParseComment(commnet string) (peer common.MyPeer, err error) {
 	return
 }
 
-func client(c *fiber.Ctx) error {
+func GetPeers(c *fiber.Ctx) error {
 	mikrotikPeers := mikrotikgo.GetPeers(username, password, tlsConfig)
 	var _result []common.MyPeer
 
@@ -71,7 +104,8 @@ func client(c *fiber.Ctx) error {
 		mypeer.PrivateKey = t.PrivateKey
 		mypeer.PresharedKey = t.PresharedKey
 		mypeer.Address = t.AllowedAddress
-		mypeer.Enabled, _ = strconv.ParseBool(t.Disabled)
+		disabled, _ := strconv.ParseBool(t.Disabled)
+		mypeer.Enabled = !disabled
 
 		_result = append(_result, mypeer)
 	}
