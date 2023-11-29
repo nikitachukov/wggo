@@ -5,8 +5,11 @@ go 1.21.4
 require (
 	github.com/gofiber/fiber/v2 v2.51.0
 	github.com/hashicorp/vault-client-go v0.4.2
-	//golang.zx2c4.com/wireguard/wgctrl v0.0.0-20230429144221-925a1e7659e6
+	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20230429144221-925a1e7659e6
+//golang.zx2c4.com/wireguard/wgctrl v0.0.0-20230429144221-925a1e7659e6
 )
+
+require golang.org/x/crypto v0.8.0 // indirect
 
 require (
 	github.com/andybalholm/brotli v1.0.5 // indirect

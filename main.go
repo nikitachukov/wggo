@@ -1,15 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"crypto/tls"
 	"encoding/json"
 	"github.com/gofiber/fiber/v2"
 	"log"
-	"net"
-	"sort"
 	"strconv"
-	"strings"
 	"wggo/common"
 	"wggo/mikrotikgo"
 )
@@ -48,23 +44,7 @@ func AddPeer(c *fiber.Ctx) error {
 		return err
 	}
 
-	log.Println(payload.Name)
-	peers := mikrotikgo.GetPeers(username, password, tlsConfig)
-	var ips []net.IP
-	for _, peer := range peers {
-		if peer.Interface == "wg-in" {
-			ips = append(ips, net.ParseIP(strings.Split(peer.AllowedAddress, "/")[0]))
-			println(peer.AllowedAddress, peer.Interface)
-		}
-	}
-
-	sort.Slice(ips, func(i, j int) bool {
-		return bytes.Compare(ips[i], ips[j]) < 0
-	})
-
-	nextIP := common.NextIP(ips[len(ips)-1], 1)
-	println(nextIP.String())
-
+	mikrotikgo.AddPeers(username, password, tlsConfig, payload.Name, "wg-in")
 	return c.JSON(payload)
 }
 
@@ -85,7 +65,7 @@ func ParseComment(commnet string) (peer common.MyPeer, err error) {
 	err = json.Unmarshal([]byte(commnet), &peer)
 
 	if err != nil {
-		log.Println(err)
+		//log.Println(err)
 	}
 
 	return
