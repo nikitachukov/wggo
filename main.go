@@ -15,6 +15,7 @@ var password string
 var tlsConfig *tls.Config
 
 func startApp() {
+
 	var (
 		roleId       = "697a6493-09a8-9a37-a9e3-ef8106b78507"
 		secretId     = "200913ae-c711-00a8-cb94-3c1b8bca6a23"
@@ -26,15 +27,44 @@ func startApp() {
 	username, password, tlsConfig = common.ReadCredentialsFromVault(vaultAddress, mountPoint, path, roleId, secretId)
 
 	app := fiber.New()
-	app.Get("/hello", hello)
 	app.Get("/api/session", session)
 	app.Get("/api/wireguard/client", GetPeers)
 	app.Post("/api/wireguard/client", AddPeer)
-	app.Static("/", "www") // http://localhost:3000
+	app.Post("/api/wireguard/client/:id/disable", DisablePeer)
+	app.Post("/api/wireguard/client/:id/enable", EnablePeer)
+	app.Delete("/api/wireguard/client/:id", DeletePeer)
+	app.Static("/", "www")
 
 	log.Fatal(app.Listen(":3000"))
 
 }
+
+func DeletePeer(c *fiber.Ctx) error {
+	statusCode := mikrotikgo.DeletePeer(username, password, tlsConfig, c.Params("id"))
+	if statusCode == 204 {
+		return c.Status(fiber.StatusNoContent).SendString("")
+	} else {
+		return c.Status(fiber.StatusInternalServerError).SendString("")
+	}
+}
+func DisablePeer(c *fiber.Ctx) error {
+	statusCode := mikrotikgo.SetPeerState(username, password, tlsConfig, c.Params("id"), false)
+	if statusCode == 200 {
+		return c.Status(fiber.StatusNoContent).SendString("")
+	} else {
+		return c.Status(fiber.StatusInternalServerError).SendString("")
+	}
+}
+
+func EnablePeer(c *fiber.Ctx) error {
+	statusCode := mikrotikgo.SetPeerState(username, password, tlsConfig, c.Params("id"), true)
+	if statusCode == 200 {
+		return c.Status(fiber.StatusNoContent).SendString("")
+	} else {
+		return c.Status(fiber.StatusInternalServerError).SendString("")
+	}
+}
+
 func AddPeer(c *fiber.Ctx) error {
 	payload := struct {
 		Name string `json:"name"`
@@ -50,25 +80,6 @@ func AddPeer(c *fiber.Ctx) error {
 
 func main() {
 	startApp()
-	//privateKey, _ := wgtypes.GeneratePrivateKey()
-	//presharedKey, _ := wgtypes.GenerateKey()
-	//println("PresharedKey")
-	//println(presharedKey.String())
-	//println("PrivateKey:")
-	//println(privateKey.String())
-	//println("PublicKey:")
-	//print(privateKey.PublicKey().String())
-}
-
-func ParseComment(commnet string) (peer common.MyPeer, err error) {
-	peer = common.MyPeer{}
-	err = json.Unmarshal([]byte(commnet), &peer)
-
-	if err != nil {
-		//log.Println(err)
-	}
-
-	return
 }
 
 func GetPeers(c *fiber.Ctx) error {
@@ -76,10 +87,7 @@ func GetPeers(c *fiber.Ctx) error {
 	var _result []common.MyPeer
 
 	for _, t := range mikrotikPeers {
-		mypeer, err := ParseComment(t.Comment)
-		if err != nil {
-			continue
-		}
+		mypeer := common.ParseComment(t.Comment)
 		mypeer.PublicKey = t.PublicKey
 		mypeer.PrivateKey = t.PrivateKey
 		mypeer.PresharedKey = t.PresharedKey
@@ -104,25 +112,4 @@ func session(c *fiber.Ctx) error {
 		panic(err)
 	}
 	return c.SendString(string(mySession))
-}
-
-func hello(c *fiber.Ctx) error {
-
-	return c.SendString("[{" +
-		"\"id\":\"94924658-f969-4f4f-b70c-05bb0d370faf\"," +
-		"\"name\":\"01_nikitos\"," +
-		"\"enabled\":true," +
-		"\"address\":\"10.8.0.1\"," +
-		"\"publicKey\":\"lKAsNXJdPcrKgkM5bALoethhP8JccCkk7sBJZ0BFojg=\"," +
-		"\"createdAt\":\"2023-08-20T19:32:45.497Z\"," +
-		"\"updatedAt\":\"2023-09-19T20:55:26.362Z\"," +
-		"\"persistentKeepalive\":null," +
-		"\"latestHandshakeAt\":null," +
-		"\"transferRx\":null," +
-		"\"transferTx\":null" +
-		//"\".id\":\"*45\"," +
-		//"\"privateKey\":\"QA6MPn34BLO+70RqGB2K64D4Xivsq+rbsgIaydIvMWQ=\"," +
-		//"\"presharedKey\":\"+eOW46fT37henjVVU7IK38/PJ40qMgmLS9ces3RDrdA=\"," +
-		//"\"hide\":false" +
-		"}]")
 }

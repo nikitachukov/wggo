@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"github.com/hashicorp/vault-client-go"
 	"github.com/hashicorp/vault-client-go/schema"
 	"log"
@@ -57,4 +58,13 @@ func ReadCredentialsFromVault(vaultAddress, mountPath, path, roleId, secretId st
 	}
 
 	return s.Data.Data["username"].(string), s.Data.Data["password"].(string), tlsConfig
+}
+
+func ParseComment(commnet string) (peer MyPeer) {
+	err := json.Unmarshal([]byte(commnet), &peer)
+
+	if err != nil {
+	}
+
+	return
 }
