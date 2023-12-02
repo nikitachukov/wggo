@@ -1,11 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"crypto/tls"
 	"encoding/json"
 	"github.com/gofiber/fiber/v2"
 	"log"
-	"strconv"
+	"text/template"
 	"wggo/common"
 	"wggo/mikrotikgo"
 )
@@ -14,41 +15,17 @@ var username string
 var password string
 var tlsConfig *tls.Config
 
-func startApp() {
-
-	var (
-		roleId       = "697a6493-09a8-9a37-a9e3-ef8106b78507"
-		secretId     = "200913ae-c711-00a8-cb94-3c1b8bca6a23"
-		vaultAddress = "https://vault.gopnik.win"
-		mountPoint   = "infra"
-		path         = "mikrotik"
-	)
-
-	username, password, tlsConfig = common.ReadCredentialsFromVault(vaultAddress, mountPoint, path, roleId, secretId)
-
-	app := fiber.New()
-	app.Get("/api/session", session)
-	app.Get("/api/wireguard/client", GetPeers)
-	app.Post("/api/wireguard/client", AddPeer)
-	app.Post("/api/wireguard/client/:id/disable", DisablePeer)
-	app.Post("/api/wireguard/client/:id/enable", EnablePeer)
-	app.Delete("/api/wireguard/client/:id", DeletePeer)
-	app.Static("/", "www")
-
-	log.Fatal(app.Listen(":3000"))
-
-}
-
 func DeletePeer(c *fiber.Ctx) error {
-	statusCode := mikrotikgo.DeletePeer(username, password, tlsConfig, c.Params("id"))
+	statusCode := mikrotikgo.DeletePeer(username, password, tlsConfig, common.GetPeerById(mikrotikgo.GetPeers(username, password, tlsConfig), c.Params("id")))
 	if statusCode == 204 {
 		return c.Status(fiber.StatusNoContent).SendString("")
 	} else {
 		return c.Status(fiber.StatusInternalServerError).SendString("")
 	}
 }
+
 func DisablePeer(c *fiber.Ctx) error {
-	statusCode := mikrotikgo.SetPeerState(username, password, tlsConfig, c.Params("id"), false)
+	statusCode := mikrotikgo.SetPeerState(username, password, tlsConfig, common.GetPeerById(mikrotikgo.GetPeers(username, password, tlsConfig), c.Params("id")), false)
 	if statusCode == 200 {
 		return c.Status(fiber.StatusNoContent).SendString("")
 	} else {
@@ -57,7 +34,7 @@ func DisablePeer(c *fiber.Ctx) error {
 }
 
 func EnablePeer(c *fiber.Ctx) error {
-	statusCode := mikrotikgo.SetPeerState(username, password, tlsConfig, c.Params("id"), true)
+	statusCode := mikrotikgo.SetPeerState(username, password, tlsConfig, common.GetPeerById(mikrotikgo.GetPeers(username, password, tlsConfig), c.Params("id")), true)
 	if statusCode == 200 {
 		return c.Status(fiber.StatusNoContent).SendString("")
 	} else {
@@ -74,28 +51,21 @@ func AddPeer(c *fiber.Ctx) error {
 		return err
 	}
 
-	mikrotikgo.AddPeers(username, password, tlsConfig, payload.Name, "wg-in")
+	comment := common.CreateNewComment(payload.Name)
+	allowedAddress := common.GetNextPeerIp(mikrotikgo.GetPeers(username, password, tlsConfig))
+	mikrotikgo.AddPeers(username, password, tlsConfig, "wg-in", "gopnik.win", "192.168.0.254", allowedAddress, comment)
 	return c.JSON(payload)
 }
 
-func main() {
-	startApp()
-}
-
-func GetPeers(c *fiber.Ctx) error {
+func GetWebPeers(c *fiber.Ctx) error {
 	mikrotikPeers := mikrotikgo.GetPeers(username, password, tlsConfig)
-	var _result []common.MyPeer
+	var _result []common.WebPeer
 
 	for _, t := range mikrotikPeers {
-		mypeer := common.ParseComment(t.Comment)
-		mypeer.PublicKey = t.PublicKey
-		mypeer.PrivateKey = t.PrivateKey
-		mypeer.PresharedKey = t.PresharedKey
-		mypeer.Address = t.AllowedAddress
-		disabled, _ := strconv.ParseBool(t.Disabled)
-		mypeer.Enabled = !disabled
-
-		_result = append(_result, mypeer)
+		Peer := common.CreateWebPeer(t)
+		if (Peer.ID != "") && (Peer.Hide == false) {
+			_result = append(_result, Peer)
+		}
 	}
 
 	result, err := json.Marshal(_result)
@@ -106,10 +76,75 @@ func GetPeers(c *fiber.Ctx) error {
 
 }
 
-func session(c *fiber.Ctx) error {
+func Session(c *fiber.Ctx) error {
 	mySession, err := json.Marshal(common.MySession{RequiresPassword: false, Authenticated: true})
 	if err != nil {
 		panic(err)
 	}
 	return c.SendString(string(mySession))
+}
+
+func Configuration(c *fiber.Ctx) error {
+	ClientEndpointPort := 51820
+	IfcPubKey := "uOQzUkEBJAyQWH5LopDUmz3k95+oAddf+hHLQYzoLBo="
+
+	webpeer := common.CreateWebPeer(common.GetPeerById(mikrotikgo.GetPeers(username, password, tlsConfig), c.Params("id")))
+	webpeer.ClientEndpointPort = ClientEndpointPort
+	webpeer.IfcPubKey = IfcPubKey
+
+	c.Append("content-disposition", "attachment; filename=\""+webpeer.Name+".conf\"")
+	c.Append("content-type", "text/plain; charset=utf-8")
+
+	buf := new(bytes.Buffer)
+	tmpl, err := template.New("test").Parse(`[Interface]
+ListenPort = {{.ClientEndpointPort}}
+PrivateKey = {{.PrivateKey}}
+Address = {{.Address}}
+DNS = {{.ClientDNS}}
+
+[Peer]
+PublicKey = {{.IfcPubKey}}
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = {{.ClientEndpoint}}:{{.ClientEndpointPort}}
+PresharedKey = {{.PresharedKey}}
+`)
+	if err != nil {
+		panic(err)
+	}
+	err = tmpl.Execute(buf, webpeer)
+	if err != nil {
+		panic(err)
+	}
+
+	return c.SendString(buf.String())
+}
+
+func main() {
+	startApp()
+}
+
+func startApp() {
+
+	var (
+		roleId       = "697a6493-09a8-9a37-a9e3-ef8106b78507"
+		secretId     = "200913ae-c711-00a8-cb94-3c1b8bca6a23"
+		vaultAddress = "https://vault.gopnik.win"
+		mountPoint   = "infra"
+		path         = "mikrotik"
+	)
+
+	username, password, tlsConfig = common.ReadCredentialsFromVault(vaultAddress, mountPoint, path, roleId, secretId)
+
+	app := fiber.New()
+	app.Get("/api/session", Session)
+	app.Get("/api/wireguard/client", GetWebPeers)
+	app.Post("/api/wireguard/client", AddPeer)
+	app.Post("/api/wireguard/client/:id/disable", DisablePeer)
+	app.Post("/api/wireguard/client/:id/enable", EnablePeer)
+	app.Delete("/api/wireguard/client/:id", DeletePeer)
+	app.Get("/api/wireguard/client/:id/configuration", Configuration)
+	app.Static("/", "www")
+
+	log.Fatal(app.Listen(":3000"))
+
 }

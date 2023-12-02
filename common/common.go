@@ -1,15 +1,21 @@
 package common
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"github.com/google/uuid"
 	"github.com/hashicorp/vault-client-go"
 	"github.com/hashicorp/vault-client-go/schema"
 	"log"
 	"net"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
+	"wggo/mikrotikgo"
 )
 
 func NextIP(ip net.IP, inc uint) net.IP {
@@ -60,11 +66,67 @@ func ReadCredentialsFromVault(vaultAddress, mountPath, path, roleId, secretId st
 	return s.Data.Data["username"].(string), s.Data.Data["password"].(string), tlsConfig
 }
 
-func ParseComment(commnet string) (peer MyPeer) {
-	err := json.Unmarshal([]byte(commnet), &peer)
+func ParseComment(commnet string) (CommentValue Comment, err error) {
+
+	err = json.Unmarshal([]byte(commnet), &CommentValue)
 
 	if err != nil {
 	}
 
 	return
+}
+
+func CreateNewComment(name string) string {
+	commentBuffer, _ := json.Marshal(Comment{ID: uuid.Must(uuid.NewRandom()).String(), Name: name, CreatedAt: time.Now().Format(time.RFC3339), UpdatedAt: time.Now().Format(time.RFC3339)})
+	return string(commentBuffer)
+}
+
+func GetNextPeerIp(peers []mikrotikgo.MikrotikPeer) (allowedAddress string) {
+
+	var ips []net.IP
+	for _, peer := range peers {
+		if peer.Interface == "wg-in" {
+			ips = append(ips, net.ParseIP(strings.Split(peer.AllowedAddress, "/")[0]))
+		}
+	}
+	sort.Slice(ips, func(i, j int) bool {
+		return bytes.Compare(ips[i], ips[j]) < 0
+	})
+	allowedAddress = NextIP(ips[len(ips)-1], 1).String()
+
+	return
+
+}
+
+func GetPeerById(peers []mikrotikgo.MikrotikPeer, id string) mikrotikgo.MikrotikPeer {
+	peersBuf := make(map[string]mikrotikgo.MikrotikPeer)
+	for _, peer := range peers {
+		comment, _ := ParseComment(peer.Comment)
+		peersBuf[comment.ID] = peer
+	}
+	return peersBuf[id]
+}
+
+func CreateWebPeer(MikrotikPeer mikrotikgo.MikrotikPeer) (Peer WebPeer) {
+	Peer.PrivateKey = MikrotikPeer.PrivateKey
+	Peer.PublicKey = MikrotikPeer.PublicKey
+	Peer.PresharedKey = MikrotikPeer.PresharedKey
+	Peer.Enabled, _ = strconv.ParseBool(MikrotikPeer.Disabled)
+	Peer.Enabled = !Peer.Enabled
+	Peer.Address = MikrotikPeer.AllowedAddress
+	Peer.ClientEndpoint = MikrotikPeer.ClientEndpoint
+	Peer.ClientDNS = MikrotikPeer.ClientDNS
+
+	comment, err := ParseComment(MikrotikPeer.Comment)
+	if err == nil {
+		Peer.ID = comment.ID
+		Peer.Name = comment.Name
+		Peer.CreatedAt = comment.CreatedAt
+		Peer.UpdatedAt = comment.UpdatedAt
+		Peer.Hide = comment.Hide
+
+	}
+
+	return
+
 }

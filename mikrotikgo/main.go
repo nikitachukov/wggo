@@ -5,17 +5,10 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
-	"github.com/google/uuid"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"io"
 	"log"
-	"net"
 	"net/http"
-	"sort"
-	"strings"
-	"time"
-	"wggo/common"
-	"wggo/mikrotikgo/types"
 )
 
 func basicAuth(username, password string) string {
@@ -23,7 +16,7 @@ func basicAuth(username, password string) string {
 	return base64.StdEncoding.EncodeToString([]byte(auth))
 }
 
-func GetPeers(username, password string, tlsConfig *tls.Config) []mikrotikgo.Peer {
+func GetPeers(username, password string, tlsConfig *tls.Config) []MikrotikPeer {
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
 	client := &http.Client{Transport: transport}
 
@@ -43,7 +36,7 @@ func GetPeers(username, password string, tlsConfig *tls.Config) []mikrotikgo.Pee
 
 	data, err := io.ReadAll(resp.Body)
 
-	var targets []mikrotikgo.Peer
+	var targets []MikrotikPeer
 
 	err = json.Unmarshal(data, &targets)
 	if err != nil {
@@ -54,42 +47,22 @@ func GetPeers(username, password string, tlsConfig *tls.Config) []mikrotikgo.Pee
 
 }
 
-func AddPeers(username string, password string, tlsConfig *tls.Config, name string, ifc string) string {
-
-	var ips []net.IP
-	for _, peer := range GetPeers(username, password, tlsConfig) {
-		if peer.Interface == "wg-in" {
-			ips = append(ips, net.ParseIP(strings.Split(peer.AllowedAddress, "/")[0]))
-		}
-	}
-	sort.Slice(ips, func(i, j int) bool {
-		return bytes.Compare(ips[i], ips[j]) < 0
-	})
-	allowedAddress := common.NextIP(ips[len(ips)-1], 1).String()
+func AddPeers(username string, password string, tlsConfig *tls.Config, ifc string, clientEndpoint string, clientDns string, allowedAddress, comment string) string {
 
 	privateKey, _ := wgtypes.GeneratePrivateKey()
 	presharedKey, _ := wgtypes.GenerateKey()
 	pubKey := privateKey.PublicKey()
 
-	type Comment struct {
-		Name      string `json:"name"`
-		Hide      bool   `json:"hide,omitempty"`
-		Easy      bool   `json:"easy,omitempty"`
-		ID        string `json:"id"`
-		UpdatedAt string `json:"updatedAt,omitempty"`
-		CreatedAt string `json:"createdAt,omitempty"`
-	}
-
-	commentBuffer, _ := json.Marshal(Comment{ID: uuid.Must(uuid.NewRandom()).String(), Name: name, CreatedAt: time.Now().Format(time.RFC3339), UpdatedAt: time.Now().Format(time.RFC3339)})
-
-	peer := &mikrotikgo.Peer{
+	peer := &MikrotikPeer{
 		ClientAddress:  allowedAddress + "/32",
 		PublicKey:      pubKey.String(),
 		PrivateKey:     privateKey.String(),
 		PresharedKey:   presharedKey.String(),
-		Comment:        string(commentBuffer),
+		Comment:        comment,
 		AllowedAddress: allowedAddress + "/32",
 		Interface:      ifc,
+		ClientEndpoint: clientEndpoint,
+		ClientDNS:      clientDns,
 	}
 
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
@@ -112,29 +85,12 @@ func AddPeers(username string, password string, tlsConfig *tls.Config, name stri
 	return username
 }
 
-func SetPeerState(username, password string, tlsConfig *tls.Config, id string, enable bool) int {
+func SetPeerState(username, password string, tlsConfig *tls.Config, peer MikrotikPeer, enable bool) int {
 	var verb string
 	if enable == true {
 		verb = "enable"
 	} else {
 		verb = "disable"
-	}
-
-	peers := make(map[string]mikrotikgo.Peer)
-
-	for _, peer := range GetPeers(username, password, tlsConfig) {
-
-		var comment struct {
-			Id   string `json:"id"`
-			Name string `json:"name"`
-		}
-
-		err := json.Unmarshal([]byte(peer.Comment), &comment)
-		if err != nil {
-			continue
-		}
-
-		peers[comment.Id] = peer
 	}
 
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
@@ -143,7 +99,7 @@ func SetPeerState(username, password string, tlsConfig *tls.Config, id string, e
 	payload := new(bytes.Buffer)
 	err := json.NewEncoder(payload).Encode(struct {
 		Numbers string `json:"numbers"`
-	}{Numbers: peers[id].MikrotikID})
+	}{Numbers: peer.ID})
 	if err != nil {
 	}
 
@@ -154,36 +110,11 @@ func SetPeerState(username, password string, tlsConfig *tls.Config, id string, e
 
 }
 
-func DeletePeer(username, password string, tlsConfig *tls.Config, id string) int {
-
-	peers := make(map[string]mikrotikgo.Peer)
-
-	for _, peer := range GetPeers(username, password, tlsConfig) {
-
-		var comment struct {
-			Id   string `json:"id"`
-			Name string `json:"name"`
-		}
-
-		err := json.Unmarshal([]byte(peer.Comment), &comment)
-		if err != nil {
-			continue
-		}
-
-		peers[comment.Id] = peer
-	}
-
+func DeletePeer(username, password string, tlsConfig *tls.Config, peer MikrotikPeer) int {
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
 	client := &http.Client{Transport: transport}
 
-	payload := new(bytes.Buffer)
-	err := json.NewEncoder(payload).Encode(struct {
-		Numbers string `json:"numbers"`
-	}{Numbers: peers[id].MikrotikID})
-	if err != nil {
-	}
-
-	req, _ := http.NewRequest("DELETE", "https://router.gopnik.win/rest/interface/wireguard/peers/"+peers[id].MikrotikID, nil)
+	req, _ := http.NewRequest("DELETE", "https://router.gopnik.win/rest/interface/wireguard/peers/"+peer.ID, nil)
 	req.Header.Add("Authorization", "Basic "+basicAuth(username, password))
 	resp, _ := client.Do(req)
 	return resp.StatusCode
