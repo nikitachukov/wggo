@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"github.com/gofiber/fiber/v2"
+	"github.com/skip2/go-qrcode"
 	"log"
 	"text/template"
 	"wggo/common"
@@ -95,8 +96,11 @@ func Configuration(c *fiber.Ctx) error {
 	c.Append("content-disposition", "attachment; filename=\""+webpeer.Name+".conf\"")
 	c.Append("content-type", "text/plain; charset=utf-8")
 
-	buf := new(bytes.Buffer)
-	tmpl, err := template.New("test").Parse(`[Interface]
+	return c.SendString(string(configFromPeer(webpeer)))
+}
+
+func configFromPeer(webpeer common.WebPeer) (config []byte) {
+	templateStr := `[Interface]
 ListenPort = {{.ClientEndpointPort}}
 PrivateKey = {{.PrivateKey}}
 Address = {{.Address}}
@@ -107,7 +111,10 @@ PublicKey = {{.IfcPubKey}}
 AllowedIPs = 0.0.0.0/0, ::/0
 Endpoint = {{.ClientEndpoint}}:{{.ClientEndpointPort}}
 PresharedKey = {{.PresharedKey}}
-`)
+`
+
+	buf := new(bytes.Buffer)
+	tmpl, err := template.New("test").Parse(templateStr)
 	if err != nil {
 		panic(err)
 	}
@@ -116,7 +123,30 @@ PresharedKey = {{.PresharedKey}}
 		panic(err)
 	}
 
-	return c.SendString(buf.String())
+	config = buf.Bytes()
+
+	return
+}
+
+func GetQRCode(c *fiber.Ctx) error {
+	ClientEndpointPort := 51820
+	IfcPubKey := "uOQzUkEBJAyQWH5LopDUmz3k95+oAddf+hHLQYzoLBo="
+
+	webpeer := common.CreateWebPeer(common.GetPeerById(mikrotikgo.GetPeers(username, password, tlsConfig), c.Params("id")))
+	webpeer.ClientEndpointPort = ClientEndpointPort
+	webpeer.IfcPubKey = IfcPubKey
+
+	c.Append("content-disposition", "inline; filename=qrcode.svg")
+	c.Append("content-type", "image/png; charset=utf-8")
+
+	var png []byte
+	png, err := qrcode.Encode(string(configFromPeer(webpeer)), qrcode.Highest, 512)
+	if err != nil {
+		panic(err)
+	}
+
+	return c.Send(png)
+
 }
 
 func main() {
@@ -143,6 +173,7 @@ func startApp() {
 	app.Post("/api/wireguard/client/:id/enable", EnablePeer)
 	app.Delete("/api/wireguard/client/:id", DeletePeer)
 	app.Get("/api/wireguard/client/:id/configuration", Configuration)
+	app.Get("/api/wireguard/client/:id/qrcode.svg", GetQRCode)
 	app.Static("/", "www")
 
 	log.Fatal(app.Listen(":3000"))
