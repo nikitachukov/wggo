@@ -11,11 +11,6 @@ import (
 	"net/http"
 )
 
-func basicAuth(username, password string) string {
-	auth := username + ":" + password
-	return base64.StdEncoding.EncodeToString([]byte(auth))
-}
-
 func GetPeers(username, password string, tlsConfig *tls.Config) []MikrotikPeer {
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
 	client := &http.Client{Transport: transport}
@@ -26,7 +21,7 @@ func GetPeers(username, password string, tlsConfig *tls.Config) []MikrotikPeer {
 		log.Fatal(err)
 	}
 
-	req.Header.Add("Authorization", "Basic "+basicAuth(username, password))
+	req.Header.Add("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(username+":"+password)))
 
 	q := req.URL.Query()
 	q.Add("interface", "wg-in")
@@ -75,7 +70,7 @@ func AddPeers(username string, password string, tlsConfig *tls.Config, ifc strin
 	}
 
 	req, _ := http.NewRequest("POST", "https://router.gopnik.win/rest/interface/wireguard/peers/add", body)
-	req.Header.Add("Authorization", "Basic "+basicAuth(username, password))
+	req.Header.Add("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(username+":"+password)))
 	resp, _ := client.Do(req)
 
 	data, _ := io.ReadAll(resp.Body)
@@ -104,7 +99,7 @@ func SetPeerState(username, password string, tlsConfig *tls.Config, peer Mikroti
 	}
 
 	req, _ := http.NewRequest("POST", "https://router.gopnik.win/rest/interface/wireguard/peers/"+verb, payload)
-	req.Header.Add("Authorization", "Basic "+basicAuth(username, password))
+	req.Header.Add("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(username+":"+password)))
 	resp, _ := client.Do(req)
 	return resp.StatusCode
 
@@ -115,7 +110,7 @@ func DeletePeer(username, password string, tlsConfig *tls.Config, peer MikrotikP
 	client := &http.Client{Transport: transport}
 
 	req, _ := http.NewRequest("DELETE", "https://router.gopnik.win/rest/interface/wireguard/peers/"+peer.ID, nil)
-	req.Header.Add("Authorization", "Basic "+basicAuth(username, password))
+	req.Header.Add("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(username+":"+password)))
 	resp, _ := client.Do(req)
 	return resp.StatusCode
 

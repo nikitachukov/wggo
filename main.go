@@ -8,13 +8,24 @@ import (
 	"github.com/skip2/go-qrcode"
 	"log"
 	"text/template"
+	"time"
 	"wggo/common"
 	"wggo/mikrotikgo"
+)
+
+var (
+	ClientEndpointPort = 51820
+	IfcPubKey          = "uOQzUkEBJAyQWH5LopDUmz3k95+oAddf+hHLQYzoLBo="
 )
 
 var username string
 var password string
 var tlsConfig *tls.Config
+var ticker *time.Ticker
+var quit chan struct{}
+var startCh chan int
+
+var currentPeersChan chan []mikrotikgo.MikrotikPeer
 
 func DeletePeer(c *fiber.Ctx) error {
 	statusCode := mikrotikgo.DeletePeer(username, password, tlsConfig, common.GetPeerById(mikrotikgo.GetPeers(username, password, tlsConfig), c.Params("id")))
@@ -59,9 +70,8 @@ func AddPeer(c *fiber.Ctx) error {
 }
 
 func GetWebPeers(c *fiber.Ctx) error {
-	mikrotikPeers := mikrotikgo.GetPeers(username, password, tlsConfig)
+	mikrotikPeers := <-currentPeersChan
 	var _result []common.WebPeer
-
 	for _, t := range mikrotikPeers {
 		Peer := common.CreateWebPeer(t)
 		if (Peer.ID != "") && (Peer.Hide == false) {
@@ -129,8 +139,6 @@ PresharedKey = {{.PresharedKey}}
 }
 
 func GetQRCode(c *fiber.Ctx) error {
-	ClientEndpointPort := 51820
-	IfcPubKey := "uOQzUkEBJAyQWH5LopDUmz3k95+oAddf+hHLQYzoLBo="
 
 	webpeer := common.CreateWebPeer(common.GetPeerById(mikrotikgo.GetPeers(username, password, tlsConfig), c.Params("id")))
 	webpeer.ClientEndpointPort = ClientEndpointPort
@@ -149,6 +157,14 @@ func GetQRCode(c *fiber.Ctx) error {
 
 }
 
+func stop(c *fiber.Ctx) error {
+
+	quit <- struct{}{}
+
+	return c.SendString("fuck")
+
+}
+
 func main() {
 	startApp()
 }
@@ -161,9 +177,29 @@ func startApp() {
 		vaultAddress = "https://vault.gopnik.win"
 		mountPoint   = "infra"
 		path         = "mikrotik"
+		ticker       = time.NewTicker(750 * time.Millisecond)
+		quit         = make(chan struct{})
 	)
 
+	currentPeersChan = make(chan []mikrotikgo.MikrotikPeer)
+
 	username, password, tlsConfig = common.ReadCredentialsFromVault(vaultAddress, mountPoint, path, roleId, secretId)
+
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				currentPeersChan <- mikrotikgo.GetPeers(username, password, tlsConfig)
+
+				log.Println("fetching data from mikrotik")
+
+			case <-quit:
+				log.Println("stop")
+				ticker.Stop()
+				//return
+			}
+		}
+	}()
 
 	app := fiber.New()
 	app.Get("/api/session", Session)
@@ -174,6 +210,7 @@ func startApp() {
 	app.Delete("/api/wireguard/client/:id", DeletePeer)
 	app.Get("/api/wireguard/client/:id/configuration", Configuration)
 	app.Get("/api/wireguard/client/:id/qrcode.svg", GetQRCode)
+	//app.Get("/zzz/stop/", stop)
 	app.Static("/", "www")
 
 	log.Fatal(app.Listen(":3000"))

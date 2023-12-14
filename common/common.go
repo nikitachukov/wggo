@@ -116,6 +116,8 @@ func CreateWebPeer(MikrotikPeer mikrotikgo.MikrotikPeer) (Peer WebPeer) {
 	Peer.Address = MikrotikPeer.AllowedAddress
 	Peer.ClientEndpoint = MikrotikPeer.ClientEndpoint
 	Peer.ClientDNS = MikrotikPeer.ClientDNS
+	Peer.TransferRx = MikrotikPeer.Rx
+	Peer.TransferTx = MikrotikPeer.Tx
 
 	comment, err := ParseComment(MikrotikPeer.Comment)
 	if err == nil {
