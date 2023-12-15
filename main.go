@@ -14,8 +14,18 @@ import (
 )
 
 var (
-	ClientEndpointPort = 51820
-	IfcPubKey          = "uOQzUkEBJAyQWH5LopDUmz3k95+oAddf+hHLQYzoLBo="
+	ClientEndpointPort    = 51820
+	ClientEndpointAddress = "gopnik.win"
+	clientDns             = "192.168.0.254"
+	IfcPubKey             = "uOQzUkEBJAyQWH5LopDUmz3k95+oAddf+hHLQYzoLBo="
+	roleId                = "697a6493-09a8-9a37-a9e3-ef8106b78507"
+	secretId              = "200913ae-c711-00a8-cb94-3c1b8bca6a23"
+	vaultAddress          = "https://vault.gopnik.win"
+	mountPoint            = "infra"
+	path                  = "mikrotik"
+	mikrotikUrl           = "https://router.gopnik.win/rest/"
+	httpPort              = "3000"
+	wgIfc                 = "wg-in"
 )
 
 var username string
@@ -63,7 +73,7 @@ func AddPeer(c *fiber.Ctx) error {
 	}
 	comment := common.CreateNewComment(payload.Name)
 	allowedAddress := common.GetNextPeerIp(<-currentPeersChan)
-	Client.AddPeer("wg-in", "gopnik.win", "192.168.0.254", allowedAddress, comment)
+	Client.AddPeer(wgIfc, ClientEndpointAddress, clientDns, allowedAddress, comment)
 	return c.JSON(payload)
 }
 
@@ -94,9 +104,6 @@ func Session(c *fiber.Ctx) error {
 }
 
 func Configuration(c *fiber.Ctx) error {
-	ClientEndpointPort := 51820
-	IfcPubKey := "uOQzUkEBJAyQWH5LopDUmz3k95+oAddf+hHLQYzoLBo="
-
 	webpeer := common.CreateWebPeer(Client.GetPeerById(c.Params("id")))
 	webpeer.ClientEndpointPort = ClientEndpointPort
 	webpeer.IfcPubKey = IfcPubKey
@@ -161,22 +168,15 @@ func main() {
 
 func startApp() {
 
-	var (
-		roleId       = "697a6493-09a8-9a37-a9e3-ef8106b78507"
-		secretId     = "200913ae-c711-00a8-cb94-3c1b8bca6a23"
-		vaultAddress = "https://vault.gopnik.win"
-		mountPoint   = "infra"
-		path         = "mikrotik"
-		ticker       = time.NewTicker(750 * time.Millisecond)
-		quit         = make(chan struct{})
-	)
+	var ticker = time.NewTicker(750 * time.Millisecond)
+	var quit = make(chan struct{})
 
 	currentPeersChan = make(chan []mikrotikgo.MikrotikPeer)
 
 	username, password, tlsConfig = common.ReadCredentialsFromVault(vaultAddress, mountPoint, path, roleId, secretId)
 
 	Client = mikrotikgo.MikrotikClient{
-		Url:       "https://router.gopnik.win/rest/",
+		Url:       mikrotikUrl,
 		Login:     username,
 		Password:  password,
 		TlsConfig: tlsConfig,
@@ -209,6 +209,6 @@ func startApp() {
 	app.Get("/api/wireguard/client/:id/qrcode.svg", GetQRCode)
 	app.Static("/", "www")
 
-	log.Fatal(app.Listen(":3000"))
+	log.Fatal(app.Listen(":" + httpPort))
 
 }
