@@ -66,18 +66,8 @@ func ReadCredentialsFromVault(vaultAddress, mountPath, path, roleId, secretId st
 	return s.Data.Data["username"].(string), s.Data.Data["password"].(string), tlsConfig
 }
 
-func ParseComment(commnet string) (CommentValue Comment, err error) {
-
-	err = json.Unmarshal([]byte(commnet), &CommentValue)
-
-	if err != nil {
-	}
-
-	return
-}
-
 func CreateNewComment(name string) string {
-	commentBuffer, _ := json.Marshal(Comment{ID: uuid.Must(uuid.NewRandom()).String(), Name: name, CreatedAt: time.Now().Format(time.RFC3339), UpdatedAt: time.Now().Format(time.RFC3339)})
+	commentBuffer, _ := json.Marshal(mikrotikgo.Comment{ID: uuid.Must(uuid.NewRandom()).String(), Name: name, CreatedAt: time.Now().Format(time.RFC3339), UpdatedAt: time.Now().Format(time.RFC3339)})
 	return string(commentBuffer)
 }
 
@@ -98,13 +88,21 @@ func GetNextPeerIp(peers []mikrotikgo.MikrotikPeer) (allowedAddress string) {
 
 }
 
-func GetPeerById(peers []mikrotikgo.MikrotikPeer, id string) mikrotikgo.MikrotikPeer {
-	peersBuf := make(map[string]mikrotikgo.MikrotikPeer)
-	for _, peer := range peers {
-		comment, _ := ParseComment(peer.Comment)
-		peersBuf[comment.ID] = peer
+func ParseComment(commnet string) (CommentValue struct {
+	Name      string `json:"name"`
+	Hide      bool   `json:"hide,omitempty"`
+	Easy      bool   `json:"easy,omitempty"`
+	ID        string `json:"id"`
+	UpdatedAt string `json:"updatedAt,omitempty"`
+	CreatedAt string `json:"createdAt,omitempty"`
+}, err error) {
+
+	err = json.Unmarshal([]byte(commnet), &CommentValue)
+
+	if err != nil {
 	}
-	return peersBuf[id]
+
+	return
 }
 
 func CreateWebPeer(MikrotikPeer mikrotikgo.MikrotikPeer) (Peer WebPeer) {

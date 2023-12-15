@@ -1,5 +1,7 @@
 package mikrotikgo
 
+import "crypto/tls"
+
 type MikrotikPeer struct {
 	ID                     string `json:".id,omitempty"`
 	AllowedAddress         string `json:"allowed-address"`
@@ -20,4 +22,20 @@ type MikrotikPeer struct {
 	PublicKey              string `json:"public-key"`
 	Rx                     string `json:"rx,omitempty"`
 	Tx                     string `json:"tx,omitempty"`
+}
+
+type MikrotikClient struct {
+	Url       string
+	Login     string
+	Password  string
+	TlsConfig *tls.Config
+}
+
+type Comment struct {
+	Name      string `json:"name"`
+	Hide      bool   `json:"hide,omitempty"`
+	Easy      bool   `json:"easy,omitempty"`
+	ID        string `json:"id"`
+	UpdatedAt string `json:"updatedAt,omitempty"`
+	CreatedAt string `json:"createdAt,omitempty"`
 }

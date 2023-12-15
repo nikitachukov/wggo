@@ -21,14 +21,14 @@ var (
 var username string
 var password string
 var tlsConfig *tls.Config
-var ticker *time.Ticker
 var quit chan struct{}
-var startCh chan int
+
+var Client mikrotikgo.MikrotikClient
 
 var currentPeersChan chan []mikrotikgo.MikrotikPeer
 
 func DeletePeer(c *fiber.Ctx) error {
-	statusCode := mikrotikgo.DeletePeer(username, password, tlsConfig, common.GetPeerById(mikrotikgo.GetPeers(username, password, tlsConfig), c.Params("id")))
+	statusCode := Client.DeletePeer(Client.GetPeerById(c.Params("id")))
 	if statusCode == 204 {
 		return c.Status(fiber.StatusNoContent).SendString("")
 	} else {
@@ -37,7 +37,7 @@ func DeletePeer(c *fiber.Ctx) error {
 }
 
 func DisablePeer(c *fiber.Ctx) error {
-	statusCode := mikrotikgo.SetPeerState(username, password, tlsConfig, common.GetPeerById(mikrotikgo.GetPeers(username, password, tlsConfig), c.Params("id")), false)
+	statusCode := Client.SetPeerState(Client.GetPeerById(c.Params("id")), false)
 	if statusCode == 200 {
 		return c.Status(fiber.StatusNoContent).SendString("")
 	} else {
@@ -46,7 +46,7 @@ func DisablePeer(c *fiber.Ctx) error {
 }
 
 func EnablePeer(c *fiber.Ctx) error {
-	statusCode := mikrotikgo.SetPeerState(username, password, tlsConfig, common.GetPeerById(mikrotikgo.GetPeers(username, password, tlsConfig), c.Params("id")), true)
+	statusCode := Client.SetPeerState(Client.GetPeerById(c.Params("id")), true)
 	if statusCode == 200 {
 		return c.Status(fiber.StatusNoContent).SendString("")
 	} else {
@@ -58,14 +58,12 @@ func AddPeer(c *fiber.Ctx) error {
 	payload := struct {
 		Name string `json:"name"`
 	}{}
-
 	if err := c.BodyParser(&payload); err != nil {
 		return err
 	}
-
 	comment := common.CreateNewComment(payload.Name)
-	allowedAddress := common.GetNextPeerIp(mikrotikgo.GetPeers(username, password, tlsConfig))
-	mikrotikgo.AddPeers(username, password, tlsConfig, "wg-in", "gopnik.win", "192.168.0.254", allowedAddress, comment)
+	allowedAddress := common.GetNextPeerIp(<-currentPeersChan)
+	Client.AddPeer("wg-in", "gopnik.win", "192.168.0.254", allowedAddress, comment)
 	return c.JSON(payload)
 }
 
@@ -99,7 +97,7 @@ func Configuration(c *fiber.Ctx) error {
 	ClientEndpointPort := 51820
 	IfcPubKey := "uOQzUkEBJAyQWH5LopDUmz3k95+oAddf+hHLQYzoLBo="
 
-	webpeer := common.CreateWebPeer(common.GetPeerById(mikrotikgo.GetPeers(username, password, tlsConfig), c.Params("id")))
+	webpeer := common.CreateWebPeer(Client.GetPeerById(c.Params("id")))
 	webpeer.ClientEndpointPort = ClientEndpointPort
 	webpeer.IfcPubKey = IfcPubKey
 
@@ -140,7 +138,7 @@ PresharedKey = {{.PresharedKey}}
 
 func GetQRCode(c *fiber.Ctx) error {
 
-	webpeer := common.CreateWebPeer(common.GetPeerById(mikrotikgo.GetPeers(username, password, tlsConfig), c.Params("id")))
+	webpeer := common.CreateWebPeer(Client.GetPeerById(c.Params("id")))
 	webpeer.ClientEndpointPort = ClientEndpointPort
 	webpeer.IfcPubKey = IfcPubKey
 
@@ -154,14 +152,6 @@ func GetQRCode(c *fiber.Ctx) error {
 	}
 
 	return c.Send(png)
-
-}
-
-func stop(c *fiber.Ctx) error {
-
-	quit <- struct{}{}
-
-	return c.SendString("fuck")
 
 }
 
@@ -185,11 +175,18 @@ func startApp() {
 
 	username, password, tlsConfig = common.ReadCredentialsFromVault(vaultAddress, mountPoint, path, roleId, secretId)
 
+	Client = mikrotikgo.MikrotikClient{
+		Url:       "https://router.gopnik.win/rest/",
+		Login:     username,
+		Password:  password,
+		TlsConfig: tlsConfig,
+	}
+
 	go func() {
 		for {
 			select {
 			case <-ticker.C:
-				currentPeersChan <- mikrotikgo.GetPeers(username, password, tlsConfig)
+				currentPeersChan <- Client.GetPeers()
 
 				log.Println("fetching data from mikrotik")
 
@@ -210,7 +207,6 @@ func startApp() {
 	app.Delete("/api/wireguard/client/:id", DeletePeer)
 	app.Get("/api/wireguard/client/:id/configuration", Configuration)
 	app.Get("/api/wireguard/client/:id/qrcode.svg", GetQRCode)
-	//app.Get("/zzz/stop/", stop)
 	app.Static("/", "www")
 
 	log.Fatal(app.Listen(":3000"))

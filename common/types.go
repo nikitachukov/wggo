@@ -25,12 +25,3 @@ type WebPeer struct {
 	ClientEndpoint      string `json:"ClientEndpoint,omitempty"`
 	ClientDNS           string `json:"ClientDNS,omitempty"`
 }
-
-type Comment struct {
-	Name      string `json:"name"`
-	Hide      bool   `json:"hide,omitempty"`
-	Easy      bool   `json:"easy,omitempty"`
-	ID        string `json:"id"`
-	UpdatedAt string `json:"updatedAt,omitempty"`
-	CreatedAt string `json:"createdAt,omitempty"`
-}
