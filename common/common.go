@@ -130,3 +130,18 @@ func CreateWebPeer(MikrotikPeer mikrotikgo.MikrotikPeer) (Peer WebPeer) {
 	return
 
 }
+
+func SplitAny(s string, seps string) []string {
+	splitter := func(r rune) bool {
+		return strings.ContainsRune(seps, r)
+	}
+	return strings.FieldsFunc(s, splitter)
+}
+
+func microtikAtToS(s string) int32 {
+	if len(s) > 0 {
+		words := SplitAny(s, "dhms")
+		log.Println(s, "-->", strings.Join(words, " "))
+	}
+	return 0
+}
