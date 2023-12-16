@@ -26,6 +26,7 @@ var ClientConfig common.MyClientConfig
 
 var bindAddress string
 var bindPort string
+var staticDir string
 var username string
 var password string
 var tlsConfig *tls.Config
@@ -173,6 +174,7 @@ func readConfig() {
 
 	viper.SetDefault("app.bind_address", "127.0.0.1")
 	viper.SetDefault("app.bind_port", "3000")
+	viper.SetDefault("app.static_dir", "www")
 
 	viper.SetDefault("client_config.endpoint_port", "51820")
 
@@ -184,6 +186,7 @@ func readConfig() {
 
 	bindAddress = viper.GetString("app.bind_address")
 	bindPort = viper.GetString("app.bind_port")
+	staticDir = viper.GetString("app.static_dir")
 
 	ClientConfig.EndpointPort = viper.GetString("client_config.endpoint_port")
 	ClientConfig.EndpointAddress = viper.GetString("client_config.endpoint_address")
@@ -241,7 +244,7 @@ func startApp() {
 	app.Delete("/api/wireguard/client/:id", DeletePeer)
 	app.Get("/api/wireguard/client/:id/configuration", Configuration)
 	app.Get("/api/wireguard/client/:id/qrcode.svg", GetQRCode)
-	app.Static("/", "www")
+	app.Static("/", "/home/nikitos/GolandProjects/wggo/www")
 
 	log.Fatal(app.Listen(bindAddress + ":" + bindPort))
 

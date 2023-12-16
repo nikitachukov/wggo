@@ -1,6 +1,7 @@
 app:
   bind_address: 0.0.0.0
   bind_port: 3000
+  static_dir: www
 
 wg_ifc:
   name: wg-in
