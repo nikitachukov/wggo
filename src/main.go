@@ -16,13 +16,9 @@ import (
 	"wggo/mikrotikgo"
 )
 
-var ClientConfig common.MyClientConfig
+import _ "time/tzdata"
 
-//var (
-//	ClientEndpointPort    = "51820"
-//	ClientEndpointAddress = "gopnik.win"
-//	ClientDns             = "192.168.0.254"
-//)
+var ClientConfig common.MyClientConfig
 
 var bindAddress string
 var bindPort string
@@ -169,6 +165,7 @@ func readConfig() {
 	viper.SetConfigName("config") // name of config file (without extension)
 	viper.SetConfigType("yml")    // REQUIRED if the config file does not have the extension in the name
 	viper.AddConfigPath(".")      // optionally look for config in the working directory
+	viper.AddConfigPath("..")     // optionally look for config in the working directory
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
@@ -244,7 +241,7 @@ func startApp() {
 	app.Delete("/api/wireguard/client/:id", DeletePeer)
 	app.Get("/api/wireguard/client/:id/configuration", Configuration)
 	app.Get("/api/wireguard/client/:id/qrcode.svg", GetQRCode)
-	app.Static("/", "/home/nikitos/GolandProjects/wggo/www")
+	app.Static("/", staticDir)
 
 	log.Fatal(app.Listen(bindAddress + ":" + bindPort))
 

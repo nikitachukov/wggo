@@ -1,0 +1,25 @@
+services:
+  backend:
+    container_name: wggo
+    image: wggo
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 3001:3001
+    volumes:
+      - ./config.yml:/app/config.yml
+    environment:
+      - WG_APP_BIND_PORT=3001
+      - WG_APP_STATIC_DIR=/app/www
+      - WG_ROUTER_VAULT_ADDRESS=https://vault.gopnik.win
+      - WG_ROUTER_VAULT_MOUNT_POINT=infra
+      - WG_ROUTER_VAULT_PATH=mikrotik
+      - WG_ROUTER_VAULT_ROLE_ID=697a6493-09a8-9a37-a9e3-ef8106b78507
+      - WG_ROUTER_VAULT_SECRET_ID=200913ae-c711-00a8-cb94-3c1b8bca6a23
+      - TZ=Europe/Moscow
+
+#      WG_ROUTER_VAULT_ADDRESS=https://vault.gopnik.win;WG_ROUTER_VAULT_MOUNT_POINT=infra;WG_ROUTER_VAULT_PATH=mikrotik;WG_ROUTER_VAULT_ROLE_ID=697a6493-09a8-9a37-a9e3-ef8106b78507;WG_ROUTER_VAULT_SECRET_ID=200913ae-c711-00a8-cb94-3c1b8bca6a23
+
+
+
