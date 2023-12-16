@@ -88,7 +88,7 @@ func GetNextPeerIp(peers []mikrotikgo.MikrotikPeer) (allowedAddress string) {
 
 }
 
-func ParseComment(commnet string) (CommentValue struct {
+func ParseComment(comment string) (CommentValue struct {
 	Name      string `json:"name"`
 	Hide      bool   `json:"hide,omitempty"`
 	Easy      bool   `json:"easy,omitempty"`
@@ -97,7 +97,7 @@ func ParseComment(commnet string) (CommentValue struct {
 	CreatedAt string `json:"createdAt,omitempty"`
 }, err error) {
 
-	err = json.Unmarshal([]byte(commnet), &CommentValue)
+	err = json.Unmarshal([]byte(comment), &CommentValue)
 
 	if err != nil {
 	}

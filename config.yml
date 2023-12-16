@@ -1,0 +1,20 @@
+app:
+  bind_address: 0.0.0.0
+  bind_port: 3000
+
+wg_ifc:
+  name: wg-in
+  pub_key: uOQzUkEBJAyQWH5LopDUmz3k95+oAddf+hHLQYzoLBo=
+
+router:
+  rest_url: https://router.gopnik.win/rest/
+  vault_role_id: WG_ROUTER_VAULT_ROLE_ID
+  vault_secret_id: WG_ROUTER_VAULT_SECRET_ID
+  vault_address: WG_ROUTER_VAULT_ADDRESS
+  vault_mount_point: WG_ROUTER_VAULT_MOUNT_POINT
+  vault_path: WG_ROUTER_VAULT_PATH
+
+client_config:
+  endpoint_port: 51820
+  endpoint_address: gopnik.win
+  dns: 192.168.0.254

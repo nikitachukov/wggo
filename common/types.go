@@ -5,6 +5,12 @@ type MySession struct {
 	Authenticated    bool `json:"authenticated"`
 }
 
+type MyClientConfig struct {
+	EndpointPort    string
+	EndpointAddress string
+	Dns             string
+}
+
 type WebPeer struct {
 	ID                  string `json:"id"`
 	Name                string `json:"name"`
@@ -20,7 +26,7 @@ type WebPeer struct {
 	PrivateKey          string `json:"privateKey"`
 	PresharedKey        string `json:"presharedKey"`
 	Hide                bool   `json:"hide"`
-	ClientEndpointPort  int    `json:"ClientEndpointPort,omitempty"`
+	ClientEndpointPort  string `json:"ClientEndpointPort,omitempty"`
 	IfcPubKey           string `json:"IfcPubKey,omitempty"`
 	ClientEndpoint      string `json:"ClientEndpoint,omitempty"`
 	ClientDNS           string `json:"ClientDNS,omitempty"`

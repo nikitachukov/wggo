@@ -4,30 +4,28 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/skip2/go-qrcode"
+	"github.com/spf13/viper"
 	"log"
+	"strings"
 	"text/template"
 	"time"
 	"wggo/common"
 	"wggo/mikrotikgo"
 )
 
-var (
-	ClientEndpointPort    = 51820
-	ClientEndpointAddress = "gopnik.win"
-	clientDns             = "192.168.0.254"
-	IfcPubKey             = "uOQzUkEBJAyQWH5LopDUmz3k95+oAddf+hHLQYzoLBo="
-	roleId                = "697a6493-09a8-9a37-a9e3-ef8106b78507"
-	secretId              = "200913ae-c711-00a8-cb94-3c1b8bca6a23"
-	vaultAddress          = "https://vault.gopnik.win"
-	mountPoint            = "infra"
-	path                  = "mikrotik"
-	mikrotikUrl           = "https://router.gopnik.win/rest/"
-	httpPort              = "3000"
-	wgIfc                 = "wg-in"
-)
+var ClientConfig common.MyClientConfig
 
+//var (
+//	ClientEndpointPort    = "51820"
+//	ClientEndpointAddress = "gopnik.win"
+//	ClientDns             = "192.168.0.254"
+//)
+
+var bindAddress string
+var bindPort string
 var username string
 var password string
 var tlsConfig *tls.Config
@@ -73,7 +71,7 @@ func AddPeer(c *fiber.Ctx) error {
 	}
 	comment := common.CreateNewComment(payload.Name)
 	allowedAddress := common.GetNextPeerIp(<-currentPeersChan)
-	Client.AddPeer(wgIfc, ClientEndpointAddress, clientDns, allowedAddress, comment)
+	Client.AddPeer(viper.GetString("wg_ifc.name"), ClientConfig.EndpointAddress, ClientConfig.Dns, allowedAddress, comment)
 	return c.JSON(payload)
 }
 
@@ -105,8 +103,8 @@ func Session(c *fiber.Ctx) error {
 
 func Configuration(c *fiber.Ctx) error {
 	webpeer := common.CreateWebPeer(Client.GetPeerById(c.Params("id")))
-	webpeer.ClientEndpointPort = ClientEndpointPort
-	webpeer.IfcPubKey = IfcPubKey
+	webpeer.ClientEndpointPort = ClientConfig.EndpointPort
+	webpeer.IfcPubKey = viper.GetString("wg_ifc.pub_key")
 
 	c.Append("content-disposition", "attachment; filename=\""+webpeer.Name+".conf\"")
 	c.Append("content-type", "text/plain; charset=utf-8")
@@ -146,8 +144,8 @@ PresharedKey = {{.PresharedKey}}
 func GetQRCode(c *fiber.Ctx) error {
 
 	webpeer := common.CreateWebPeer(Client.GetPeerById(c.Params("id")))
-	webpeer.ClientEndpointPort = ClientEndpointPort
-	webpeer.IfcPubKey = IfcPubKey
+	webpeer.ClientEndpointPort = ClientConfig.EndpointPort
+	webpeer.IfcPubKey = viper.GetString("wg_ifc.pub_key")
 
 	c.Append("content-disposition", "inline; filename=qrcode.svg")
 	c.Append("content-type", "image/png; charset=utf-8")
@@ -166,17 +164,53 @@ func main() {
 	startApp()
 }
 
+func readConfig() {
+	viper.SetConfigName("config") // name of config file (without extension)
+	viper.SetConfigType("yml")    // REQUIRED if the config file does not have the extension in the name
+	viper.AddConfigPath(".")      // optionally look for config in the working directory
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	viper.AutomaticEnv()
+
+	viper.SetDefault("app.bind_address", "127.0.0.1")
+	viper.SetDefault("app.bind_port", "3000")
+
+	viper.SetDefault("client_config.endpoint_port", "51820")
+
+	viper.SetEnvPrefix("wg")
+	err := viper.ReadInConfig()
+	if err != nil {
+		panic(fmt.Errorf("fatal error config file: %w", err))
+	}
+
+	bindAddress = viper.GetString("app.bind_address")
+	bindPort = viper.GetString("app.bind_port")
+
+	ClientConfig.EndpointPort = viper.GetString("client_config.endpoint_port")
+	ClientConfig.EndpointAddress = viper.GetString("client_config.endpoint_address")
+	ClientConfig.Dns = viper.GetString("client_config.dns")
+
+	log.Println("ready!")
+
+}
+
 func startApp() {
+	readConfig()
 
 	var ticker = time.NewTicker(750 * time.Millisecond)
 	var quit = make(chan struct{})
 
 	currentPeersChan = make(chan []mikrotikgo.MikrotikPeer)
 
-	username, password, tlsConfig = common.ReadCredentialsFromVault(vaultAddress, mountPoint, path, roleId, secretId)
+	username, password, tlsConfig = common.ReadCredentialsFromVault(
+		viper.GetString("router.vault_address"),
+		viper.GetString("router.vault_mount_point"),
+		viper.GetString("router.vault_path"),
+		viper.GetString("router.vault_role_id"),
+		viper.GetString("router.vault_secret_id"),
+	)
 
 	Client = mikrotikgo.MikrotikClient{
-		Url:       mikrotikUrl,
+		Url:       viper.GetString("router.rest_url"),
 		Login:     username,
 		Password:  password,
 		TlsConfig: tlsConfig,
@@ -209,6 +243,6 @@ func startApp() {
 	app.Get("/api/wireguard/client/:id/qrcode.svg", GetQRCode)
 	app.Static("/", "www")
 
-	log.Fatal(app.Listen(":" + httpPort))
+	log.Fatal(app.Listen(bindAddress + ":" + bindPort))
 
 }
